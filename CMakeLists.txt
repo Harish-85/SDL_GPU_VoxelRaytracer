@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 26)
 
 find_package(SDL3 REQUIRED)
 find_package(SDL3_shadercross REQUIRED)
+find_package(glm CONFIG REQUIRED)
+
 
 add_executable(voxel_raytracer main.cpp
         VoxelRaytracer.cpp
@@ -16,4 +18,4 @@ add_executable(voxel_raytracer main.cpp
         SDLFullScreenComputeRenderer.cpp
         SDLFullScreenComputeRenderer.h)
 
-target_link_libraries(voxel_raytracer PRIVATE SDL3::SDL3 SDL3_shadercross::SDL3_shadercross)
+target_link_libraries(voxel_raytracer PRIVATE SDL3::SDL3 SDL3_shadercross::SDL3_shadercross glm::glm)

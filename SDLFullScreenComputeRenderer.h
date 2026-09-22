@@ -9,7 +9,20 @@
 #include <iostream>
 #include  <SDL3/SDL.h>
 #include <SDL3_shadercross/SDL_shadercross.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
+struct CameraData {
+    glm::mat4x4 transform;
+};
+
+struct PushConstants {
+    glm::vec4 origin;
+
+
+    glm::vec4 direction;
+
+};
 
 class SDLFullScreenComputeRenderer {
 
@@ -17,6 +30,9 @@ private:
     SDL_Window* _window;
     SDL_GPUDevice* _device;
     SDL_GPUComputePipeline* _computePipeline;
+    SDL_GPUTexture* _computeTexture;
+
+    CameraData cam { glm::mat4(1.0f)};
 
     int _width =500,_height = 500;
 
@@ -49,18 +65,51 @@ public:
         std::cout<<"Initialization successful" <<std::endl;
 
         _computePipeline = GetComputePipeline();
-
+        _computeTexture = SetupComputeTexture();
 
         Tick();
     }
 
+    bool isRightClickHeld;
+    float sensitivity = .002;
+    bool isRunning = true;
     void Tick() {
-        while (true) {
+        while (isRunning) {
             SDL_Event event;
-            if (SDL_PollEvent(&event)) {
+            while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+                    isRunning = false;
                     break;
                 }
+
+                if ( event.type == SDL_EVENT_MOUSE_MOTION && event.motion.state & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) {
+                    glm::vec2 mouseDelta = glm::vec2(event.motion.xrel,event.motion.yrel);
+
+                    glm::vec3 right = glm::normalize(glm::vec3(cam.transform[0]));
+                    auto res = glm::rotate( cam.transform,sensitivity*mouseDelta.x,glm::vec3(0,1,0));
+
+                    res = glm::rotate( res,sensitivity*mouseDelta.y,right);
+
+
+                    cam.transform = res;
+
+                    // 1. Get the quaternion using the method above
+                    glm::quat rotationQuat = glm::quat_cast(res);
+
+                    // 2. Extract Euler angles (returns a vec3 representing pitch, yaw, roll in radians)
+                    glm::vec3 eulerAngles = glm::eulerAngles(rotationQuat);
+
+                    // Convert to degrees if needed
+                    float pitchDegrees = glm::degrees(eulerAngles.x);
+                    float yawDegrees   = glm::degrees(eulerAngles.y);
+                    float rollDegrees  = glm::degrees(eulerAngles.z);
+
+                    std::cout << "Camera rotation " << pitchDegrees << " " << yawDegrees << " " << rollDegrees <<std::endl;
+
+
+                }
+
+
             }
 
             Triangle();
@@ -70,6 +119,9 @@ public:
 
 
     void ExitApp() {
+        SDL_ReleaseGPUTexture( _device,_computeTexture);
+        SDL_ReleaseGPUComputePipeline(_device,_computePipeline);
+
         SDL_DestroyGPUDevice(_device);
         SDL_DestroyWindow(_window);
         SDL_Quit();
@@ -92,36 +144,26 @@ public:
             return;
         }
 
-        SDL_GPUTextureCreateInfo computeTextureInfo{};
-
-        computeTextureInfo.height = 500;
-        computeTextureInfo.layer_count_or_depth = 1;
-        computeTextureInfo.width = 500;
-        computeTextureInfo.type = SDL_GPU_TEXTURETYPE_2D;
-        computeTextureInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
-        computeTextureInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-        computeTextureInfo.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE | SDL_GPU_TEXTUREUSAGE_SAMPLER;
-        computeTextureInfo.num_levels = 1;
-
-        SDL_GPUTexture *computeTexture = SDL_CreateGPUTexture(_device, &computeTextureInfo);
-
-        if (!computeTexture) {
-            std::cerr << "Output texture creation error " <<SDL_GetError()<<std::endl;
-            return;
-        }
-
 
         SDL_GPUStorageTextureReadWriteBinding computeTexBindings {};
-        computeTexBindings.texture = computeTexture;
+        computeTexBindings.texture = _computeTexture;
         computeTexBindings.mip_level = 0;
         computeTexBindings.layer = 0;
         computeTexBindings.cycle = true;
 
+
+
         SDL_GPUComputePass* computePass= SDL_BeginGPUComputePass( cmd, &computeTexBindings,1,nullptr,0);
 
-
         SDL_BindGPUComputePipeline( computePass, _computePipeline);
-        SDL_DispatchGPUCompute( computePass,500,500,1);
+        PushConstants constants{};
+        glm::vec3 forwardXyz = glm::normalize(-glm::vec3(cam.transform[2]));
+        constants.direction = glm::vec4(forwardXyz, 0.0f);
+        constants.origin    = glm::vec4(glm::vec3(cam.transform[3]), 0.0f);
+
+        SDL_PushGPUComputeUniformData( cmd, 0,&constants,sizeof(constants));
+
+        SDL_DispatchGPUCompute( computePass,500/8,500/8,1);
         SDL_EndGPUComputePass( computePass);
 
         SDL_GPUColorTargetInfo colorTargetInfo{};
@@ -132,15 +174,15 @@ public:
         colorTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
         colorTargetInfo.texture = swapChainTexture;
 
-        SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass( cmd,&colorTargetInfo,1, NULL);
+       // SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass( cmd,&colorTargetInfo,1, NULL);
 
 
 
-        SDL_EndGPURenderPass(renderPass);
+        //SDL_EndGPURenderPass(renderPass);
 
         SDL_GPUBlitInfo blitInfo{};
         blitInfo.cycle = true;
-        blitInfo.source.texture = computeTexture;
+        blitInfo.source.texture = _computeTexture;
         blitInfo.destination.texture = swapChainTexture;
         blitInfo.filter = SDL_GPU_FILTER_NEAREST;
         blitInfo.source.w = 500;
@@ -152,9 +194,32 @@ public:
         SDL_BlitGPUTexture(cmd,&blitInfo);
 
         SDL_SubmitGPUCommandBuffer(cmd);
+
+
     }
 
 private :
+    SDL_GPUTexture *SetupComputeTexture() {
+        SDL_GPUTextureCreateInfo computeTextureInfo{};
+
+        computeTextureInfo.height = 500;
+        computeTextureInfo.layer_count_or_depth = 1;
+        computeTextureInfo.width = 500;
+        computeTextureInfo.type = SDL_GPU_TEXTURETYPE_2D;
+        computeTextureInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
+        computeTextureInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+        computeTextureInfo.usage = SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE | SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        computeTextureInfo.num_levels = 1;
+
+        SDL_GPUTexture *computeTexture = SDL_CreateGPUTexture(_device, &computeTextureInfo);
+
+        if (!computeTexture) {
+            std::cerr << "Output texture creation error " <<SDL_GetError()<<std::endl;
+            return nullptr;
+        }
+
+        return computeTexture;
+    }
 
     SDL_GPUComputePipeline* GetComputePipeline() {
         size_t spriVSize;
@@ -175,6 +240,7 @@ private :
         computePipelineInfo.format = SDL_GPU_SHADERFORMAT_SPIRV;
         computePipelineInfo.num_readwrite_storage_buffers = 0;
         computePipelineInfo.num_readwrite_storage_textures = 1;
+        computePipelineInfo.num_uniform_buffers = 1;
         computePipelineInfo.threadcount_x = 8;
         computePipelineInfo.threadcount_y = 8;
         computePipelineInfo.threadcount_z = 1;
