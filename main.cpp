@@ -8,7 +8,7 @@ int main() {
     MagicaVoxelDataProvider voxelDataProvier("/home/harish/Downloads/#treehouse.vox");
     voxelDataProvier.LoadVoxelAsset();
 
-    SDLFullScreenComputeRenderer fullscreenRenderer;
+    SDLFullScreenComputeRenderer fullscreenRenderer(voxelDataProvier.GetVoxelData().Voxels);
 
 
 }

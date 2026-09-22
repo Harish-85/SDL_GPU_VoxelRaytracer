@@ -12,6 +12,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include "VoxelData.h"
+
 struct CameraData {
     glm::mat4x4 transform;
 };
@@ -31,13 +33,17 @@ private:
     SDL_GPUDevice* _device;
     SDL_GPUComputePipeline* _computePipeline;
     SDL_GPUTexture* _computeTexture;
+    SDL_GPUBuffer* voxelBuffer;
+    SDL_GPUTransferBuffer* stagingBuffer;
+    std::vector<uint32_t> voxels;
 
     CameraData cam { glm::mat4(1.0f)};
 
     int _width =500,_height = 500;
 
 public:
-    SDLFullScreenComputeRenderer() {
+    SDLFullScreenComputeRenderer(std::vector<uint32_t> v) {
+        voxels = v;
         if (SDL_Init(SDL_INIT_VIDEO) < 0) {
             std::cerr<<"Failed to initialize SDL " << SDL_GetError() <<std::endl;
             return;
@@ -67,6 +73,8 @@ public:
         _computePipeline = GetComputePipeline();
         _computeTexture = SetupComputeTexture();
 
+        UploadGpuBuffToStagingBuff();
+
         Tick();
     }
 
@@ -93,13 +101,9 @@ public:
 
                     cam.transform = res;
 
-                    // 1. Get the quaternion using the method above
                     glm::quat rotationQuat = glm::quat_cast(res);
-
-                    // 2. Extract Euler angles (returns a vec3 representing pitch, yaw, roll in radians)
                     glm::vec3 eulerAngles = glm::eulerAngles(rotationQuat);
 
-                    // Convert to degrees if needed
                     float pitchDegrees = glm::degrees(eulerAngles.x);
                     float yawDegrees   = glm::degrees(eulerAngles.y);
                     float rollDegrees  = glm::degrees(eulerAngles.z);
@@ -127,10 +131,26 @@ public:
         SDL_Quit();
     }
 
+
     void Triangle() {
 
 
         SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(_device);
+
+        //copy the voxel data
+        SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass( cmd);
+        SDL_GPUTransferBufferLocation transferLocation{};
+        transferLocation.transfer_buffer = stagingBuffer;
+        transferLocation.offset = 0;
+
+        SDL_GPUBufferRegion destination{};
+        destination.buffer = voxelBuffer;
+        destination.size = voxels.size() * sizeof(uint32_t);
+        destination.offset = 0;
+
+        SDL_UploadToGPUBuffer( copyPass, &transferLocation,&destination,false);
+        SDL_EndGPUCopyPass(copyPass);
+
 
         SDL_GPUTexture* swapChainTexture;
         uint width = _width;
@@ -152,8 +172,14 @@ public:
         computeTexBindings.cycle = true;
 
 
+        computeTexBindings.texture = _computeTexture;
+        computeTexBindings.mip_level = 0;
+        computeTexBindings.layer = 0;
+        computeTexBindings.cycle = true;
 
-        SDL_GPUComputePass* computePass= SDL_BeginGPUComputePass( cmd, &computeTexBindings,1,nullptr,0);
+
+        SDL_GPUComputePass* computePass= SDL_BeginGPUComputePass( cmd, &computeTexBindings,1,
+            nullptr,0);
 
         SDL_BindGPUComputePipeline( computePass, _computePipeline);
         PushConstants constants{};
@@ -162,6 +188,8 @@ public:
         constants.origin    = glm::vec4(glm::vec3(cam.transform[3]), 0.0f);
 
         SDL_PushGPUComputeUniformData( cmd, 0,&constants,sizeof(constants));
+
+        SDL_BindGPUComputeStorageBuffers( computePass,0,&voxelBuffer,1);
 
         SDL_DispatchGPUCompute( computePass,500/8,500/8,1);
         SDL_EndGPUComputePass( computePass);
@@ -221,6 +249,31 @@ private :
         return computeTexture;
     }
 
+    void UploadGpuBuffToStagingBuff() {
+
+        SDL_GPUBufferCreateInfo voxelBuffInfo{};
+        voxelBuffInfo.props = 0;
+        voxelBuffInfo.size = voxels.size() * sizeof(uint32_t);
+        voxelBuffInfo.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ;
+
+
+        voxelBuffer = SDL_CreateGPUBuffer(_device,&voxelBuffInfo);
+
+        SDL_GPUStorageBufferReadWriteBinding computeBuffBindings{};
+        computeBuffBindings.buffer = voxelBuffer;
+
+        SDL_GPUTransferBufferCreateInfo transferInfo {};
+        transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+        transferInfo.size = voxels.size() * sizeof(uint32_t);;
+        stagingBuffer = SDL_CreateGPUTransferBuffer(_device,&transferInfo);
+
+        void* dataPtr = SDL_MapGPUTransferBuffer(_device,stagingBuffer,false);
+        SDL_memcpy( dataPtr,voxels.data(),voxels.size() * sizeof(uint32_t));
+        SDL_UnmapGPUTransferBuffer(_device, stagingBuffer);
+
+
+    }
+
     SDL_GPUComputePipeline* GetComputePipeline() {
         size_t spriVSize;
 
@@ -241,6 +294,7 @@ private :
         computePipelineInfo.num_readwrite_storage_buffers = 0;
         computePipelineInfo.num_readwrite_storage_textures = 1;
         computePipelineInfo.num_uniform_buffers = 1;
+        computePipelineInfo.num_readonly_storage_buffers = 1;
         computePipelineInfo.threadcount_x = 8;
         computePipelineInfo.threadcount_y = 8;
         computePipelineInfo.threadcount_z = 1;

@@ -6,6 +6,7 @@
 #define VOXEL_RAYTRACER_VOXELDATA_H
 #include <fstream>
 #include <iostream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -14,9 +15,9 @@
 class VoxelData {
 public:
     unsigned const int BoundsHeight,BoundsWidth,BoundsDepth;
-    std::vector<uint8_t> Voxels;
+    std::vector<uint32_t> Voxels;
 
-    VoxelData(const int height, const int width, const int depth,std::vector<uint8_t> voxels) : BoundsHeight(height), BoundsWidth(width),
+    VoxelData(const int height, const int width, const int depth,std::vector<uint32_t> voxels) : BoundsHeight(height), BoundsWidth(width),
                                                                         BoundsDepth(depth) {
         Voxels = voxels;
     }
@@ -39,7 +40,7 @@ public:
 
 struct MVVoxel {
     int8_t x,y,z;
-    int8_t color;
+    uint8_t color;
 };
 
 struct Color {
@@ -62,7 +63,7 @@ public:
 
     }
 
-    void AddVoxel(const int8_t x, const int8_t y, const int8_t z, const int8_t color ) {
+    void AddVoxel(const int8_t x, const int8_t y, const int8_t z, const uint8_t color ) {
         Voxels.push_back( MVVoxel{ x ,y,z,color});
     }
 
@@ -206,15 +207,31 @@ public:
 
     }
 
+    std::set<uint8_t> uniqueColors;
     VoxelData GetVoxelData() override {
-        std::vector<uint8_t> voxels( data.BoundsHeight * data.BoundsWidth * data.BoundsDepth);
+        std::vector<uint32_t> voxels( data.BoundsHeight * data.BoundsWidth * data.BoundsDepth,0);
+
+        std::set<uint8_t> nonZeroIndices;
 
         for (MVVoxel voxel: data.Voxels) {
-            voxels[data.BoundsHeight* data.BoundsWidth* voxel.x +
-                data.BoundsWidth*voxel.y  + voxel.z] = voxel.color;
+            int index = data.BoundsHeight* data.BoundsWidth* voxel.x +
+                data.BoundsWidth*voxel.y  + voxel.z;
+            voxels[index] = voxel.color;
+            nonZeroIndices.insert(index);
         }
 
-        VoxelData vData( data.BoundsHeight,data.BoundsWidth,data.BoundsHeight,voxels);
+        int j =0;
+        while (true) {
+            if (voxels[j] == 0) {
+                break;
+            }
+            j++;
+        }
+        std::cout<<"air voxel at " << j<<std::endl;
+        VoxelData vData( data.BoundsHeight,data.BoundsWidth,data.BoundsDepth,voxels);
+
+        std::cout<<"Voxel bounds " << data.BoundsHeight << " " << data.BoundsWidth<< " " << data.BoundsHeight<<std::endl;
+
         return vData;
     }
 

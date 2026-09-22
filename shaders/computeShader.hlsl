@@ -7,14 +7,38 @@ struct Camera {
 
 };
 
+struct Voxel{
+    uint material;
+};
+
 ConstantBuffer<Camera> constants : register(b0,space2);
 RWTexture2D<float4> OutputTexture : register(u0,space1);
-
+StructuredBuffer<uint> voxels :register(t0,space0);
 
 
 [numthreads(8, 8, 1)]
 void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
+    uint testVoxel = voxels[1];
+
+    // 2. Output a stark color based on whether it is populated
+    if (testVoxel > 0)
+    {
+        // If the voxel has a material ID, paint a solid green overlay in the corner
+        if (dispatchThreadID.x < 50 && dispatchThreadID.y < 50) {
+            OutputTexture[dispatchThreadID.xy] = float4(0.0, 1.0, 0.0, 1.0); // Solid Green
+            return;
+        }
+    }
+    else
+    {
+        // If it evaluates to 0 (or wasn't uploaded), paint a solid red overlay instead
+        if (dispatchThreadID.x < 50 && dispatchThreadID.y < 50) {
+            OutputTexture[dispatchThreadID.xy] = float4(1.0, 0.0, 0.0, 1.0); // Solid Red
+            return;
+        }
+    }
+
     float r = (float)dispatchThreadID.x/500.0;
     float g = (float)dispatchThreadID.y/500.0;
 
@@ -35,6 +59,7 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
     float fovScale = 1.0;
     float3 rayDirection = normalize(camForward + (ndc.x * camRight * fovScale) + (ndc.y * camUp * fovScale));
 
+    //trace this
 
 
 
