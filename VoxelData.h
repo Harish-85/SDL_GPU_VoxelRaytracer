@@ -22,9 +22,13 @@ public:
         Voxels = voxels;
     }
 
-    int8_t GetVoxel(int x, int y, int z) {
+    uint32_t GetVoxel(int x, int y, int z) {
+        int mappedY = y;
+        int mappedZ = z;
+        int mappedX = x;
+
         if (x< BoundsWidth && y < BoundsHeight && z < BoundsDepth) {
-            return Voxels[BoundsHeight*BoundsDepth*x + BoundsDepth*y  + z];
+            return Voxels[BoundsHeight*BoundsDepth*mappedX + BoundsDepth*mappedY  + mappedZ];
         }
         return -1;
     }
@@ -97,6 +101,10 @@ public:
 
     ~MagicaVoxelDataProvider() {
         readFile.close();
+    }
+
+    Color* GetColors() {
+        return data.Colors;
     }
 
     void LoadVoxelAsset() {
@@ -193,7 +201,7 @@ public:
                     break;
                 default:
                     std::cout<<"Attempting to execute a invalid chink id "<<std::endl;
-                    return;
+                    break;
 
             }
 
