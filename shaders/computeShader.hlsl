@@ -69,15 +69,15 @@ uint GetVoxel(int x, int y, int z) {
 
 //stole this from the fast voxel traversal algorithm paper
 Ray GetNextRay(Ray r){
-    int tMaxX=0,tMaxY=0,tMaxZ=0;
+    float tMaxX=0,tMaxY=0,tMaxZ=0;
 
     int stepX = (r.direction.x > 0) ? 1 : -1;
     int stepY = (r.direction.y > 0) ? 1 : -1;
     int stepZ = (r.direction.z > 0) ? 1 : -1;
 
-    int tdx = abs( 1/r.direction.x);
-    int tdy = abs( 1/r.direction.y);
-    int tdz = abs( 1/r.direction.z);
+    float tdx = abs( 1/r.direction.x);
+    float tdy = abs( 1/r.direction.y);
+    float tdz = abs( 1/r.direction.z);
 
     if(r.direction.x > 0){
         tMaxX = (r.voxelCoord.x + 1 - r.origin.x) * tdx;

@@ -15,7 +15,6 @@
 #include "VoxelData.h"
 
 struct CameraData {
-    glm::mat4x4 transform;
     glm::vec3 position;
     glm::vec3 front;
     float yaw = -90;
@@ -44,7 +43,7 @@ private:
     std::vector<uint32_t> voxels;
     Color colors[256];
 
-    CameraData cam { glm::mat4(1.0f) ,glm::vec3(50,50,50),glm::vec3(0,1,0),-90.0f,0.0f};
+    CameraData cam { glm::vec3(50,50,50),glm::vec3(0,1,0),-90.0f,0.0f};
 
     int _width =500,_height = 500;
 
@@ -91,6 +90,7 @@ public:
     bool isRightClickHeld;
     float sensitivity = 1;
     bool isRunning = true;
+    float moveSpeed = .1;
     void Tick() {
         while (isRunning) {
             SDL_Event event;
@@ -137,12 +137,37 @@ public:
                     glm::vec3 right = glm::normalize(glm::cross(front, glm::vec3(0, 1, 0)));
                     glm::vec3 up    = glm::normalize(glm::cross(right, front));
 
-                    // If cam.transform is a VIEW matrix (World-to-Local):
-                    cam.transform = glm::lookAt(cam.position, cam.position + front, up);
                     cam.front = front;
 
                 }
+                const bool* keyboardState = SDL_GetKeyboardState(NULL);
 
+                // Calculate dynamic directional vectors relative to camera looking angle
+                glm::vec3 forwardDir = cam.front;
+                glm::vec3 rightDir   = glm::normalize(glm::cross(forwardDir, glm::vec3(0.0f, 1.0f, 0.0f)));
+                glm::vec3 upDir      = glm::vec3(0.0f, 1.0f, 0.0f); // Pure world-up for E/Q vertical movement
+
+                float currentSpeed = moveSpeed ;
+
+                if (keyboardState[SDL_SCANCODE_W]) {
+                    cam.position += forwardDir * currentSpeed;
+                }
+                if (keyboardState[SDL_SCANCODE_S]) {
+                    cam.position -= forwardDir * currentSpeed;
+                }
+                if (keyboardState[SDL_SCANCODE_A]) {
+                    cam.position += rightDir * currentSpeed;
+                }
+                if (keyboardState[SDL_SCANCODE_D]) {
+                    cam.position -= rightDir * currentSpeed;
+                }
+                // Optional: E to go Up, Q to go Down
+                if (keyboardState[SDL_SCANCODE_E]) {
+                    cam.position += upDir * currentSpeed;
+                }
+                if (keyboardState[SDL_SCANCODE_Q]) {
+                    cam.position -= upDir * currentSpeed;
+                }
 
             }
 
@@ -218,10 +243,9 @@ public:
 
         SDL_BindGPUComputePipeline( computePass, _computePipeline);
         PushConstants constants{};
-        glm::vec3 forwardXyz = glm::normalize(-glm::vec3(cam.transform[2]));
         constants.direction = glm::vec4(cam.front, 0.0f);
         //constants.origin    = glm::vec4(glm::vec3(cam.transform[3]), 0.0f);
-        constants.origin    = glm::vec4(50,50,50,1.0);
+        constants.origin    = glm::vec4(cam.position,0.0f);
 
         SDL_PushGPUComputeUniformData( cmd, 0,&constants,sizeof(constants));
 
