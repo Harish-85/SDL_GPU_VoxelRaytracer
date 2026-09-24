@@ -143,25 +143,6 @@ float4 GetColor(uint index) {
 
 [numthreads(8, 8, 1)] void
 CSMain(uint3 dispatchThreadID : SV_DispatchThreadID) {
-  uint testVoxel = voxels[1];
-
-  // 2. Output a stark color based on whether it is populated
-  if (testVoxel > 0) {
-    // If the voxel has a material ID, paint a solid green overlay in the corner
-    if (dispatchThreadID.x < 50 && dispatchThreadID.y < 50) {
-      OutputTexture[dispatchThreadID.xy] =
-          float4(0.0, 1.0, 0.0, 1.0); // Solid Green
-      return;
-    }
-  } else {
-    // If it evaluates to 0 (or wasn't uploaded), paint a solid red overlay
-    // instead
-    if (dispatchThreadID.x < 50 && dispatchThreadID.y < 50) {
-      OutputTexture[dispatchThreadID.xy] =
-          float4(1.0, 0.0, 0.0, 1.0); // Solid Red
-      return;
-    }
-  }
 
   float uvx = (float)dispatchThreadID.x / 500.0;
   float uvy = (float)dispatchThreadID.y / 500.0;
