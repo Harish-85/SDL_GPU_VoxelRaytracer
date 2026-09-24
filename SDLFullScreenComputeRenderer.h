@@ -69,7 +69,12 @@ public:
             return;
         }
 
-        _device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV , true, NULL);
+        SDL_PropertiesID props = SDL_CreateProperties();
+        SDL_SetBooleanProperty(props,SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN,true);
+        SDL_SetBooleanProperty(props,SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN,true);
+
+        //_device = SDL_CreateGPUDeviceWithProperties(SDL_GPU_SHADERFORMAT_SPIRV , true, NULL);
+        _device = SDL_CreateGPUDeviceWithProperties(props);
 
         if (!_device) {
             std::cerr<<"Failed to create gpu device " << SDL_GetError() <<std::endl;
@@ -94,15 +99,25 @@ public:
     bool isRightClickHeld;
     float sensitivity = 1;
     bool isRunning = true;
-    float moveSpeed = .1;
+    float moveSpeed = 50;
+
+    Uint64 lastTime = SDL_GetTicksNS();
+    float deltaTime;
     void Tick() {
         while (isRunning) {
+
+            Uint64 currentTime = SDL_GetTicksNS();
+            Uint64 elapsedTime = currentTime - lastTime;
+
+            lastTime = currentTime;
+            deltaTime = (float) elapsedTime / 1000000000.f;
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
                     isRunning = false;
                     break;
                 }
+
 
                 if ( event.type == SDL_EVENT_MOUSE_MOTION && event.motion.state & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) {
                     /*glm::vec2 mouseDelta = glm::vec2(event.motion.xrel,event.motion.yrel);
@@ -144,6 +159,7 @@ public:
                 }
 
 
+
             }
             const bool* keyboardState = SDL_GetKeyboardState(NULL);
 
@@ -152,7 +168,7 @@ public:
             glm::vec3 rightDir   = glm::normalize(glm::cross(forwardDir, glm::vec3(0.0f, 1.0f, 0.0f)));
             glm::vec3 upDir      = glm::vec3(0.0f, 1.0f, 0.0f); // Pure world-up for E/Q vertical movement
 
-            float currentSpeed = moveSpeed ;
+            float currentSpeed = moveSpeed * deltaTime;
 
             if (keyboardState[SDL_SCANCODE_W]) {
                 cam.position += forwardDir * currentSpeed;
@@ -354,7 +370,7 @@ private :
     SDL_GPUComputePipeline* GetComputePipeline() {
         size_t spriVSize;
 
-        uint8_t* computeShader = GetSpriVComputeShader("/home/harish/MyStuff/Projects/C++/voxel_raytracer/shaders/computeShader.hlsl",spriVSize);
+        uint8_t* computeShader = GetSpriVComputeShader("assets/shaders/computeShader.hlsl",spriVSize);
 
         if (!computeShader) {
             std::cerr << "Compute shader creation failed" <<std::endl;

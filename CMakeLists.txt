@@ -20,3 +20,10 @@ add_executable(voxel_raytracer main.cpp
         MagicaVoxelLoader.h)
 
 target_link_libraries(voxel_raytracer PRIVATE SDL3::SDL3 SDL3_shadercross::SDL3_shadercross glm::glm)
+
+add_custom_command(
+        TARGET voxel_raytracer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:voxel_raytracer>/assets"
+        COMMENT "copying assets folder to output directory"
+)

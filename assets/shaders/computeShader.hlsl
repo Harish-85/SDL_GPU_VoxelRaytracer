@@ -23,6 +23,8 @@ struct Ray{
     float3 origin;
     float3 direction;
     int3 voxelCoord;
+
+
 };
 
 ConstantBuffer<Camera> constants : register(b0,space2);
@@ -125,13 +127,58 @@ struct HitResult{
     uint material;
 };
 
+bool DoesRayIntersectBounds(Ray r,out Ray rayWithinBounds){
+
+
+    float3 boxMin = float3 (0.0,0.0,0.0);
+    float3 boxMax = float3(constants.gridWidth,constants.gridHeight,constants.gridDepth);
+
+    float3 invDir = 1.0/ r.direction;
+    float3 t0 = (boxMin - r.origin) * invDir;
+    float3 t1 = (boxMax - r.origin) * invDir;
+
+    float3 tmin = min(t0,t1);
+    float3 tmax = max(t0,t1);
+
+    float tnear = max(max(tmin.x,tmin.y), tmin.z);
+    float tfar = min(min(tmax.x,tmax.y),tmax.z);
+
+    if(tnear > tfar || tfar < 0.0){
+        return false;
+    }
+
+    if(tnear > 0.0){
+        rayWithinBounds.origin = r.origin;
+        rayWithinBounds.direction = r.direction;
+
+        rayWithinBounds.origin+= r.direction * (tnear + 0.0001);
+        rayWithinBounds.voxelCoord = GetVoxelCoordinates(rayWithinBounds.origin);
+        return true;
+    }
+    rayWithinBounds = r;
+
+    return true;
+
+
+}
+
 HitResult Traverse(Ray cam){
+
+
+
     HitResult res;
     res.index = -1;
     res.material = 0;
     res.normal = float3(0,1,0);
 
+Ray adjustedRay {};
+  bool inBounds = DoesRayIntersectBounds(cam,adjustedRay);
 
+    if(!inBounds){
+        return res;
+    }
+
+cam = adjustedRay;
     while(true){
         if(cam.voxelCoord .x < 0 || cam.voxelCoord.y < 0 || cam.voxelCoord.z < 0){
             return res;
@@ -145,6 +192,7 @@ HitResult Traverse(Ray cam){
             res.index = cam.voxelCoord;
             res.material = voxel;
             res.hitPoint = cam.origin.xyz;
+
             return res;
         }
         cam = GetNextRay(cam,res.normal);

@@ -7,7 +7,7 @@
 int main() {
 
     //MagicaVoxelDataProvider voxelDataProvier("/home/harish/Downloads/#treehouse.vox");
-    MagicaVoxelDataProvider voxelDataProvier("/home/harish/Downloads/#street_scene.vox");
+    MagicaVoxelDataProvider voxelDataProvier("assets/voxelFiles/#street_scene.vox");
 
     voxelDataProvier.LoadVoxelAsset();
 
