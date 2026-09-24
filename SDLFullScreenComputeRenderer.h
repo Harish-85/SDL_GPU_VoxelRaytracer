@@ -23,10 +23,9 @@ struct CameraData {
 
 struct PushConstants {
     glm::vec4 origin;
-
-
     glm::vec4 direction;
-
+    uint32_t height,width,depth;
+    uint32_t padding;
 };
 
 class SDLFullScreenComputeRenderer {
@@ -43,14 +42,19 @@ private:
     std::vector<uint32_t> voxels;
     Color colors[256];
 
+    int _gridHeight,_girdDepth,_gridWidth;
+
     CameraData cam { glm::vec3(50,50,50),glm::vec3(0,1,0),-90.0f,0.0f};
 
-    int _width =500,_height = 500;
+    int _width =1000,_height = 1000;
 
 public:
-    SDLFullScreenComputeRenderer(std::vector<uint32_t> v,Color c[256]) {
+    SDLFullScreenComputeRenderer(std::vector<uint32_t> v,Color c[256],int width,int height,int depth) {
         voxels = v;
         std::copy(c, c + 256, std::begin(colors));
+        _girdDepth = depth;
+        _gridHeight = height;
+        _gridWidth = width;
 
         if (SDL_Init(SDL_INIT_VIDEO) < 0) {
             std::cerr<<"Failed to initialize SDL " << SDL_GetError() <<std::endl;
@@ -120,14 +124,12 @@ public:
 
                     std::cout << "Camera rotation " << pitchDegrees << " " << yawDegrees << " " << rollDegrees <<std::endl;
 */
-                    cam.yaw   += event.motion.xrel * sensitivity;
-                    cam.pitch -= event.motion.yrel * sensitivity; // '-' is standard for non-inverted Y
+                    cam.yaw   -= event.motion.xrel * sensitivity;
+                    cam.pitch -= event.motion.yrel * sensitivity;
 
-                    // Constrain the pitch so the camera doesn't flip upside down
                     if (cam.pitch > 89.0f)  cam.pitch = 89.0f;
                     if (cam.pitch < -89.0f) cam.pitch = -89.0f;
 
-                    // Convert Euler angles back to a Transform Matrix or View Matrix
                     glm::vec3 front;
                     front.x = cos(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
                     front.y = sin(glm::radians(cam.pitch));
@@ -140,35 +142,36 @@ public:
                     cam.front = front;
 
                 }
-                const bool* keyboardState = SDL_GetKeyboardState(NULL);
 
-                // Calculate dynamic directional vectors relative to camera looking angle
-                glm::vec3 forwardDir = cam.front;
-                glm::vec3 rightDir   = glm::normalize(glm::cross(forwardDir, glm::vec3(0.0f, 1.0f, 0.0f)));
-                glm::vec3 upDir      = glm::vec3(0.0f, 1.0f, 0.0f); // Pure world-up for E/Q vertical movement
 
-                float currentSpeed = moveSpeed ;
+            }
+            const bool* keyboardState = SDL_GetKeyboardState(NULL);
 
-                if (keyboardState[SDL_SCANCODE_W]) {
-                    cam.position += forwardDir * currentSpeed;
-                }
-                if (keyboardState[SDL_SCANCODE_S]) {
-                    cam.position -= forwardDir * currentSpeed;
-                }
-                if (keyboardState[SDL_SCANCODE_A]) {
-                    cam.position += rightDir * currentSpeed;
-                }
-                if (keyboardState[SDL_SCANCODE_D]) {
-                    cam.position -= rightDir * currentSpeed;
-                }
-                // Optional: E to go Up, Q to go Down
-                if (keyboardState[SDL_SCANCODE_E]) {
-                    cam.position += upDir * currentSpeed;
-                }
-                if (keyboardState[SDL_SCANCODE_Q]) {
-                    cam.position -= upDir * currentSpeed;
-                }
+            // Calculate dynamic directional vectors relative to camera looking angle
+            glm::vec3 forwardDir = cam.front;
+            glm::vec3 rightDir   = glm::normalize(glm::cross(forwardDir, glm::vec3(0.0f, 1.0f, 0.0f)));
+            glm::vec3 upDir      = glm::vec3(0.0f, 1.0f, 0.0f); // Pure world-up for E/Q vertical movement
 
+            float currentSpeed = moveSpeed ;
+
+            if (keyboardState[SDL_SCANCODE_W]) {
+                cam.position += forwardDir * currentSpeed;
+            }
+            if (keyboardState[SDL_SCANCODE_S]) {
+                cam.position -= forwardDir * currentSpeed;
+            }
+            if (keyboardState[SDL_SCANCODE_A]) {
+                cam.position += rightDir * currentSpeed;
+            }
+            if (keyboardState[SDL_SCANCODE_D]) {
+                cam.position -= rightDir * currentSpeed;
+            }
+            // Optional: E to go Up, Q to go Down
+            if (keyboardState[SDL_SCANCODE_E]) {
+                cam.position += upDir * currentSpeed;
+            }
+            if (keyboardState[SDL_SCANCODE_Q]) {
+                cam.position -= upDir * currentSpeed;
             }
 
             Triangle();
@@ -247,13 +250,26 @@ public:
         //constants.origin    = glm::vec4(glm::vec3(cam.transform[3]), 0.0f);
         constants.origin    = glm::vec4(cam.position,0.0f);
 
+        constants.height = _gridHeight;
+        constants.depth = _girdDepth;
+        constants.width = _gridWidth;
+
+        std::cout<< "Pushing values to compute shader "<<std::endl;
+        std::cout
+    << "width  = " << constants.width << '\n'
+    << "height = " << constants.height << '\n'
+    << "depth  = " << constants.depth << '\n'
+    << "sizeof = " << sizeof(PushConstants) << '\n';
         SDL_PushGPUComputeUniformData( cmd, 0,&constants,sizeof(constants));
 
         SDL_BindGPUComputeStorageBuffers( computePass,0,&voxelBuffer,1);
         SDL_BindGPUComputeStorageBuffers( computePass,1,&colorBuffer,1);
 
-        SDL_DispatchGPUCompute( computePass,500/8,500/8,1);
+        SDL_DispatchGPUCompute( computePass,width/8,height/8,1);
         SDL_EndGPUComputePass( computePass);
+        std::cout<< "Compute shader done "<<SDL_GetError() <<std::endl;
+
+
 
         SDL_GPUColorTargetInfo colorTargetInfo{};
 
@@ -274,10 +290,10 @@ public:
         blitInfo.source.texture = _computeTexture;
         blitInfo.destination.texture = swapChainTexture;
         blitInfo.filter = SDL_GPU_FILTER_NEAREST;
-        blitInfo.source.w = 500;
-        blitInfo.source.h = 500;
-        blitInfo.destination.w = 500;
-        blitInfo.destination.h = 500;
+        blitInfo.source.w = width;
+        blitInfo.source.h = height;
+        blitInfo.destination.w = width;
+        blitInfo.destination.h = height;
 
 
         SDL_BlitGPUTexture(cmd,&blitInfo);
@@ -291,9 +307,9 @@ private :
     SDL_GPUTexture *SetupComputeTexture() {
         SDL_GPUTextureCreateInfo computeTextureInfo{};
 
-        computeTextureInfo.height = 500;
+        computeTextureInfo.height = _height;
         computeTextureInfo.layer_count_or_depth = 1;
-        computeTextureInfo.width = 500;
+        computeTextureInfo.width = _width;
         computeTextureInfo.type = SDL_GPU_TEXTURETYPE_2D;
         computeTextureInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
         computeTextureInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;

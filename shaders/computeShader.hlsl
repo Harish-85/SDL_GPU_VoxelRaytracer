@@ -2,6 +2,10 @@
 struct Camera {
     float4 position;
     float4 direction;
+    uint gridHeight;
+    uint gridWidth;
+    uint gridDepth;
+    uint padding;
 };
 
 struct Voxel{
@@ -31,7 +35,7 @@ int3 GetVoxelCoordinates(float3 position)
     return int3(floor(position.x), floor(position.y), floor(position.z));
 }
 Ray CreateCameraRay(float2 uv){
-    float2 ndc = float2((uv.x - 0.5) * 2.0, (uv.y - 0.5) * 2.0);
+    float2 ndc = float2((uv.x - 0.5) * 2.0, -(uv.y - 0.5) * 2.0);
 
     float3 worldUp = float3(0.0, 1.0, 0.0);
 
@@ -49,26 +53,24 @@ Ray CreateCameraRay(float2 uv){
 }
 
 
-static int boundsWidth = 126;
-static int boundsHeight=126;
-static int boundsDepth=126;
+static float3 lightDir = normalize(float3(1,1,1));
 
 uint GetVoxel(int x, int y, int z) {
-        int mappedY = z;
-        int mappedZ = boundsHeight - 1 -y;
+        int mappedY = y;
+        int mappedZ = z;
         int mappedX = x;
 
 
 
-        if (x< boundsWidth && y < boundsHeight && z < boundsDepth) {
-            return voxels[boundsHeight*boundsDepth*mappedX + boundsDepth*mappedY  + mappedZ];
+        if (x< constants.gridWidth && y < constants.gridHeight && z < constants.gridDepth) {
+            return voxels[constants.gridHeight*constants.gridDepth*mappedX + constants.gridDepth*mappedY  + mappedZ];
         }
         return 0;
    }
 
 
 //stole this from the fast voxel traversal algorithm paper
-Ray GetNextRay(Ray r){
+Ray GetNextRay(Ray r,out float3 normal){
     float tMaxX=0,tMaxY=0,tMaxZ=0;
 
     int stepX = (r.direction.x > 0) ? 1 : -1;
@@ -102,31 +104,50 @@ Ray GetNextRay(Ray r){
     if(tMaxX < tMaxY && tMaxX < tMaxZ){
         r.voxelCoord.x += stepX;
         r.origin += r.direction * tMaxX;
+        normal = float3(-stepX,0,0);
     }else if(tMaxY < tMaxZ){
         r.voxelCoord.y += stepY;
         r.origin += r.direction * tMaxY;
+        normal = float3(0,-stepY,0);
     }else{
       r.voxelCoord.z += stepZ;
       r.origin += r.direction * tMaxZ;
+        normal = float3(0,0,-stepZ);
     }
 
     return r;
 }
 
-uint Traverse(Ray cam){
+struct HitResult{
+    int3 index;
+    float3 hitPoint;
+    float3 normal;
+    uint material;
+};
+
+HitResult Traverse(Ray cam){
+    HitResult res;
+    res.index = -1;
+    res.material = 0;
+    res.normal = float3(0,1,0);
+
+
     while(true){
         if(cam.voxelCoord .x < 0 || cam.voxelCoord.y < 0 || cam.voxelCoord.z < 0){
-            return 0;
+            return res;
         }
-        if(cam.voxelCoord.x > 126 || cam.voxelCoord.y > 126 || cam.voxelCoord.z > 126){
-            return 0;
+        if(cam.voxelCoord.x >= constants.gridWidth || cam.voxelCoord.y >= constants.gridHeight || cam.voxelCoord.z >= constants.gridDepth){
+            return res;
         }
 
         uint voxel = GetVoxel(cam.voxelCoord.x, cam.voxelCoord.y, cam.voxelCoord.z);
         if(voxel > 0){
-            return voxel;
+            res.index = cam.voxelCoord;
+            res.material = voxel;
+            res.hitPoint = cam.origin.xyz;
+            return res;
         }
-        cam = GetNextRay(cam);
+        cam = GetNextRay(cam,res.normal);
     }
 }
 
@@ -141,19 +162,39 @@ float4 GetColor(uint index) {
     return float4(r, g, b, a);
 }
 
+float4 GetPixelColor(Ray r) {
+    HitResult res = Traverse(r);
+    //cast a ray on the light direction
+
+
+    Ray reflectRay;
+    reflectRay.origin = res.hitPoint + res.normal * 0.001;
+    reflectRay.direction = lightDir;
+    reflectRay.voxelCoord = GetVoxelCoordinates (reflectRay.origin);
+
+    HitResult reflectRes = Traverse(reflectRay);
+    if(reflectRes.material <1){
+        //ray escaped
+        return GetColor(res.material);
+    }
+
+    return GetColor(res.material) * .2f;
+}
+
+
 [numthreads(8, 8, 1)] void
 CSMain(uint3 dispatchThreadID : SV_DispatchThreadID) {
 
-  float uvx = (float)dispatchThreadID.x / 500.0;
-  float uvy = (float)dispatchThreadID.y / 500.0;
+  float uvx = (float)dispatchThreadID.x / 1000.0;
+  float uvy = (float)dispatchThreadID.y / 1000.0;
 
   float2 uv = float2(uvx, uvy);
 
   Ray r = CreateCameraRay(uv);
 
-  uint res = Traverse(r);
+  //HitResult res = Traverse(r);
 
-  float4 c = GetColor(res);
+  float4 c = GetPixelColor( r);
 
-  OutputTexture[dispatchThreadID.xy] = float4(c.rgb, 1.0);
+  OutputTexture[dispatchThreadID.xy] = float4(c.xyz,  1.0);
 }
