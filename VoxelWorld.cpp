@@ -3,3 +3,7 @@
 //
 
 #include "VoxelWorld.h"
+
+#include <cstdint>
+#include <memory>
+#include <glm/vec3.hpp>

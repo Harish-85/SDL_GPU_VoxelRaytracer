@@ -171,7 +171,7 @@ HitResult Traverse(Ray cam){
     res.material = 0;
     res.normal = float3(0,1,0);
 
-Ray adjustedRay {};
+Ray adjustedRay ;
   bool inBounds = DoesRayIntersectBounds(cam,adjustedRay);
 
     if(!inBounds){

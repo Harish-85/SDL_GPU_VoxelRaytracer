@@ -17,7 +17,11 @@ add_executable(voxel_raytracer main.cpp
         VoxelWorld.h
         SDLFullScreenComputeRenderer.cpp
         SDLFullScreenComputeRenderer.h
-        MagicaVoxelLoader.h)
+        MagicaVoxelLoader.h
+        Object3D.h
+        Camera.h
+        Game.h
+        ITickable.h)
 
 target_link_libraries(voxel_raytracer PRIVATE SDL3::SDL3 SDL3_shadercross::SDL3_shadercross glm::glm)
 

@@ -49,9 +49,8 @@ private:
     int _width =1000,_height = 1000;
 
 public:
-    SDLFullScreenComputeRenderer(std::vector<uint32_t> v,Color c[256],int width,int height,int depth) {
-        voxels = v;
-        std::copy(c, c + 256, std::begin(colors));
+
+    SDLFullScreenComputeRenderer(int width,int height,int depth) {
         _girdDepth = depth;
         _gridHeight = height;
         _gridWidth = width;
@@ -70,7 +69,7 @@ public:
         }
 
         SDL_PropertiesID props = SDL_CreateProperties();
-        SDL_SetBooleanProperty(props,SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN,true);
+        SDL_SetBooleanProperty(props,SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN,false);
         SDL_SetBooleanProperty(props,SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN,true);
 
         //_device = SDL_CreateGPUDeviceWithProperties(SDL_GPU_SHADERFORMAT_SPIRV , true, NULL);
@@ -89,12 +88,69 @@ public:
 
         _computePipeline = GetComputePipeline();
         _computeTexture = SetupComputeTexture();
+        AllocateBuffers(width * height * depth * sizeof(uint32_t), sizeof(Color) * 256);
 
-        UploadGpuBuffToStagingBuff(voxelBuffer,stagingBuffer,voxels.size() * sizeof(uint32_t),voxels.data());
-        UploadGpuBuffToStagingBuff(colorBuffer,colorStagingBuff,256 * sizeof(uint8_t) *4,colors);
-
-        Tick();
     }
+
+    void AllocateBuffers(uint voxelSize, uint colorSize) {
+        SDL_GPUBufferCreateInfo voxelBuffInfo{};
+        voxelBuffInfo.size = voxelSize;
+        voxelBuffInfo.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ;
+        voxelBuffer = SDL_CreateGPUBuffer(_device, &voxelBuffInfo);
+
+        SDL_GPUTransferBufferCreateInfo vTransferInfo{};
+        vTransferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+        vTransferInfo.size = voxelSize;
+        stagingBuffer = SDL_CreateGPUTransferBuffer(_device, &vTransferInfo);
+
+        SDL_GPUBufferCreateInfo colorBuffInfo{};
+        colorBuffInfo.size = colorSize;
+        colorBuffInfo.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ;
+        colorBuffer = SDL_CreateGPUBuffer(_device, &colorBuffInfo);
+
+        SDL_GPUTransferBufferCreateInfo cTransferInfo{};
+        cTransferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+        cTransferInfo.size = colorSize;
+        colorStagingBuff = SDL_CreateGPUTransferBuffer(_device, &cTransferInfo);
+    }
+
+    void UploadColorToGpu(Color c[256]) {
+        std::copy(c, c + 256, std::begin(colors));
+        UploadGpuBuffToStagingBuff( colorStagingBuff,256 * sizeof(Color) , colors);
+
+        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(_device);
+        CopyStagingBuffToGpuSize(cmd,colorBuffer,colorStagingBuff,256 * sizeof(Color));
+        SDL_SubmitGPUCommandBuffer( cmd);
+    }
+
+    void UploadVoxelsToGpu(std::vector<uint32_t> v) {
+        voxels = v;
+        UploadGpuBuffToStagingBuff(stagingBuffer,voxels.size() * sizeof(uint32_t),voxels.data());
+
+        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(_device);
+        CopyStagingBuffToGpuSize(cmd,voxelBuffer,stagingBuffer,voxels.size() * sizeof(uint32_t));
+        SDL_SubmitGPUCommandBuffer( cmd);
+    }
+
+    void SetCameraPosition(glm::vec3 pos) {
+        cam.position = pos;
+    }
+
+    void SetCameraDirection(glm::vec3 forward) {
+        cam.front = forward;
+    }
+
+    void Initialize() {
+
+        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(_device);
+
+        CopyStagingBuffToGpuSize(cmd,voxelBuffer,stagingBuffer,voxels.size() * sizeof(uint32_t));
+        CopyStagingBuffToGpuSize(cmd,colorBuffer,colorStagingBuff,256 * sizeof(Color));
+
+        SDL_SubmitGPUCommandBuffer( cmd);
+    }
+
+
 
     bool isRightClickHeld;
     float sensitivity = 1;
@@ -103,96 +159,8 @@ public:
 
     Uint64 lastTime = SDL_GetTicksNS();
     float deltaTime;
-    void Tick() {
-        while (isRunning) {
-
-            Uint64 currentTime = SDL_GetTicksNS();
-            Uint64 elapsedTime = currentTime - lastTime;
-
-            lastTime = currentTime;
-            deltaTime = (float) elapsedTime / 1000000000.f;
-            SDL_Event event;
-            while (SDL_PollEvent(&event)) {
-                if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-                    isRunning = false;
-                    break;
-                }
-
-
-                if ( event.type == SDL_EVENT_MOUSE_MOTION && event.motion.state & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) {
-                    /*glm::vec2 mouseDelta = glm::vec2(event.motion.xrel,event.motion.yrel);
-
-                    glm::vec3 right = glm::normalize(glm::vec3(cam.transform[0]));
-                    auto res = glm::rotate( cam.transform,sensitivity*mouseDelta.x,glm::vec3(0,1,0));
-
-                    res = glm::rotate( res,sensitivity*mouseDelta.y,right);
-
-
-                    cam.transform = res;
-
-                    glm::quat rotationQuat = glm::quat_cast(res);
-                    glm::vec3 eulerAngles = glm::eulerAngles(rotationQuat);
-
-                    float pitchDegrees = glm::degrees(eulerAngles.x);
-                    float yawDegrees   = glm::degrees(eulerAngles.y);
-                    float rollDegrees  = glm::degrees(eulerAngles.z);
-
-                    std::cout << "Camera rotation " << pitchDegrees << " " << yawDegrees << " " << rollDegrees <<std::endl;
-*/
-                    cam.yaw   -= event.motion.xrel * sensitivity;
-                    cam.pitch -= event.motion.yrel * sensitivity;
-
-                    if (cam.pitch > 89.0f)  cam.pitch = 89.0f;
-                    if (cam.pitch < -89.0f) cam.pitch = -89.0f;
-
-                    glm::vec3 front;
-                    front.x = cos(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
-                    front.y = sin(glm::radians(cam.pitch));
-                    front.z = sin(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
-                    front = glm::normalize(front);
-
-                    glm::vec3 right = glm::normalize(glm::cross(front, glm::vec3(0, 1, 0)));
-                    glm::vec3 up    = glm::normalize(glm::cross(right, front));
-
-                    cam.front = front;
-
-                }
-
-
-
-            }
-            const bool* keyboardState = SDL_GetKeyboardState(NULL);
-
-            // Calculate dynamic directional vectors relative to camera looking angle
-            glm::vec3 forwardDir = cam.front;
-            glm::vec3 rightDir   = glm::normalize(glm::cross(forwardDir, glm::vec3(0.0f, 1.0f, 0.0f)));
-            glm::vec3 upDir      = glm::vec3(0.0f, 1.0f, 0.0f); // Pure world-up for E/Q vertical movement
-
-            float currentSpeed = moveSpeed * deltaTime;
-
-            if (keyboardState[SDL_SCANCODE_W]) {
-                cam.position += forwardDir * currentSpeed;
-            }
-            if (keyboardState[SDL_SCANCODE_S]) {
-                cam.position -= forwardDir * currentSpeed;
-            }
-            if (keyboardState[SDL_SCANCODE_A]) {
-                cam.position += rightDir * currentSpeed;
-            }
-            if (keyboardState[SDL_SCANCODE_D]) {
-                cam.position -= rightDir * currentSpeed;
-            }
-            // Optional: E to go Up, Q to go Down
-            if (keyboardState[SDL_SCANCODE_E]) {
-                cam.position += upDir * currentSpeed;
-            }
-            if (keyboardState[SDL_SCANCODE_Q]) {
-                cam.position -= upDir * currentSpeed;
-            }
-
-            Triangle();
-        }
-        ExitApp();
+    void Render() {
+        RenderLoop();
     }
 
 
@@ -221,15 +189,12 @@ public:
         SDL_EndGPUCopyPass(copyPass);
     }
 
-    void Triangle() {
+
+
+    void RenderLoop() {
 
 
         SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(_device);
-
-        //copy the voxel data
-        CopyStagingBuffToGpuSize(cmd,voxelBuffer,stagingBuffer,voxels.size() * sizeof(uint32_t));
-        CopyStagingBuffToGpuSize(cmd,colorBuffer,colorStagingBuff,256 * sizeof(Color));
-
 
         SDL_GPUTexture* swapChainTexture;
         uint width = _width;
@@ -315,11 +280,14 @@ public:
         SDL_BlitGPUTexture(cmd,&blitInfo);
 
         SDL_SubmitGPUCommandBuffer(cmd);
-
-
     }
 
+
+
+
 private :
+
+
     SDL_GPUTexture *SetupComputeTexture() {
         SDL_GPUTextureCreateInfo computeTextureInfo{};
 
@@ -342,29 +310,10 @@ private :
         return computeTexture;
     }
 
-    void UploadGpuBuffToStagingBuff(SDL_GPUBuffer* &buff, SDL_GPUTransferBuffer* &tranferBuff,uint size,void* data) {
-
-        SDL_GPUBufferCreateInfo voxelBuffInfo{};
-        voxelBuffInfo.props = 0;
-        voxelBuffInfo.size = size;
-        voxelBuffInfo.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ;
-
-
-        buff = SDL_CreateGPUBuffer(_device,&voxelBuffInfo);
-
-        SDL_GPUStorageBufferReadWriteBinding computeBuffBindings{};
-        computeBuffBindings.buffer = buff;
-
-        SDL_GPUTransferBufferCreateInfo transferInfo {};
-        transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-        transferInfo.size = size;
-        tranferBuff = SDL_CreateGPUTransferBuffer(_device,&transferInfo);
-
+    void UploadGpuBuffToStagingBuff(SDL_GPUTransferBuffer* &tranferBuff,uint size,void* data) {
         void* dataPtr = SDL_MapGPUTransferBuffer(_device,tranferBuff,false);
         SDL_memcpy( dataPtr,data,size);
         SDL_UnmapGPUTransferBuffer(_device, tranferBuff);
-
-
     }
 
     SDL_GPUComputePipeline* GetComputePipeline() {
