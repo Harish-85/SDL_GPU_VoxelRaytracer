@@ -40,8 +40,10 @@ private:
     std::string _path;
     std::ifstream readFile;
 
-    MagicaVoxelData data;
 
+    VoxelData* data;
+
+    Color Colors[256];
 
     static constexpr uint32_t GetIntFrom4Chars(const char chunkId[4] ) {
         const uint32_t res =  static_cast<uint32_t>(chunkId[0]) |
@@ -63,7 +65,7 @@ public:
     }
 
     Color* GetColors() {
-        return data.Colors;
+        return Colors;
     }
 
     void LoadVoxelAsset() {
@@ -173,6 +175,12 @@ public:
 
 
     }
+
+private:
+    void StoreToVoxelData() {
+
+    }
+public:
 
     std::set<uint8_t> uniqueColors;
     VoxelData GetVoxelData() override {
