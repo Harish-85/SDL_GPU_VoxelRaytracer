@@ -30,7 +30,7 @@ public:
         while (SDL_PollEvent(&event)) {
             //set rotation
             if ( event.type == SDL_EVENT_MOUSE_MOTION && event.motion.state & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) {
-                yaw   -= event.motion.xrel * _sensitivity;
+                yaw   += event.motion.xrel * _sensitivity;
                 pitch -= event.motion.yrel * _sensitivity;
 
                 if (pitch > 89.0f)  pitch = 89.0f;

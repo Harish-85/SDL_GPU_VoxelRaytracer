@@ -5,6 +5,7 @@
 #ifndef VOXEL_RAYTRACER_VOXELGRID_H
 #define VOXEL_RAYTRACER_VOXELGRID_H
 #include <cstdint>
+#include <cstring>
 #include <vector>
 #include <glm/vec3.hpp>
 
@@ -13,6 +14,7 @@ const uint CHUNK_SIZE = 16;
 
 struct GridChunk {
     uint8_t voxels[CHUNK_SIZE*CHUNK_SIZE*CHUNK_SIZE];
+    bool isDirty;
 
     uint8_t GetVoxel(glm::ivec3 chunkIndex) {
         return voxels[CHUNK_SIZE * chunkIndex.z * chunkIndex.y + chunkIndex.y * CHUNK_SIZE + chunkIndex.x];
@@ -20,6 +22,10 @@ struct GridChunk {
 
     uint8_t SetVoxel(glm::ivec3 chunkIndex, uint8_t vox) {
         voxels[CHUNK_SIZE * CHUNK_SIZE * chunkIndex.z  + chunkIndex.y * CHUNK_SIZE + chunkIndex.x] = vox;
+    }
+
+    void ClearChunk() {
+
     }
 
 };

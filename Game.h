@@ -64,6 +64,8 @@ public:
             _renderer->SetCameraPosition(camera->GetPosition());
 
 
+
+
             _renderer->Render();
         }
     }

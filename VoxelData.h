@@ -36,6 +36,8 @@ public:
 
 
 class IVoxelDataProvider {
+protected:
+    VoxelData* voxelData;
 public:
 
     virtual VoxelData GetVoxelData() = 0;

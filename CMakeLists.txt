@@ -21,7 +21,8 @@ add_executable(voxel_raytracer main.cpp
         Object3D.h
         Camera.h
         Game.h
-        ITickable.h)
+        ITickable.h
+        VoxelRendererObject.h)
 
 target_link_libraries(voxel_raytracer PRIVATE SDL3::SDL3 SDL3_shadercross::SDL3_shadercross glm::glm)
 
