@@ -22,8 +22,6 @@ public:
         BoundsHeight = h;
         BoundsWidth = w;
         BoundsDepth = d;
-
-
     }
 
     void AddVoxel(const int8_t x, const int8_t y, const int8_t z, const uint8_t color ) {
@@ -41,9 +39,8 @@ private:
     std::ifstream readFile;
 
 
-    VoxelData* data;
+    MagicaVoxelData data;
 
-    Color Colors[256];
 
     static constexpr uint32_t GetIntFrom4Chars(const char chunkId[4] ) {
         const uint32_t res =  static_cast<uint32_t>(chunkId[0]) |
@@ -65,7 +62,7 @@ public:
     }
 
     Color* GetColors() {
-        return Colors;
+        return data.Colors;
     }
 
     void LoadVoxelAsset() {

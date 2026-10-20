@@ -6,6 +6,7 @@
 #define VOXEL_RAYTRACER_VOXELGRID_H
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 #include <vector>
 #include <glm/vec3.hpp>
 
@@ -20,8 +21,9 @@ struct GridChunk {
         return voxels[CHUNK_SIZE * chunkIndex.z * chunkIndex.y + chunkIndex.y * CHUNK_SIZE + chunkIndex.x];
     }
 
-    uint8_t SetVoxel(glm::ivec3 chunkIndex, uint8_t vox) {
+    void SetVoxel(glm::ivec3 chunkIndex, uint8_t vox) {
         voxels[CHUNK_SIZE * CHUNK_SIZE * chunkIndex.z  + chunkIndex.y * CHUNK_SIZE + chunkIndex.x] = vox;
+
     }
 
     void ClearChunk() {
@@ -35,6 +37,7 @@ class VoxelWorld {
 private:
     std::vector<uint32_t> topLevelGrid;
     std::vector<GridChunk> chunkPool;
+
 
     inline uint GetVolume() { return CHUNK_COUNT_DEPTH * CHUNK_COUNT_HEIGHT * CHUNK_COUNT_WIDTH;}
 
@@ -77,6 +80,8 @@ public:
         }
 
         chunkPool[ topLevelGrid[chunkIndex] ].SetVoxel( GetGridIndexInChunk(glm::ivec3(x,y,z)),vox);
+
+
     }
 
     uint8_t GetVoxel(int x, int y ,int z) {

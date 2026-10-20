@@ -12,6 +12,7 @@
 #include "Camera.h"
 #include "Object3D.h"
 #include "SDLFullScreenComputeRenderer.h"
+#include "VoxelWorld.h"
 
 
 class Game {
@@ -26,9 +27,20 @@ private:
 
     //subsystems
     std::unique_ptr<SDLFullScreenComputeRenderer> _renderer;
+    VoxelWorld voxelWorld;
 
 public:
     Game(VoxelData data,Color colors[256]) {
+        std::cout << "Writing to voxel world" <<std::endl;
+        for (int x=0; x<data.BoundsWidth ; x++) {
+            for (int y = 0; y < data.BoundsDepth; ++y) {
+                for (int z = 0; z < data.BoundsHeight ; ++z) {
+                    voxelWorld.WriteVoxel(x,y,z,data.GetVoxel(x,y,z));
+                }
+            }
+        }
+
+        std::cout << "wrote to voxel world" <<std::endl;
         this->voxels = data.Voxels;
         memcpy(color,colors,256*sizeof(Color));
         _renderer = std::make_unique<SDLFullScreenComputeRenderer>(data.BoundsWidth,data.BoundsHeight,data.BoundsDepth );

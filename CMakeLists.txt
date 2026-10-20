@@ -22,7 +22,24 @@ add_executable(voxel_raytracer main.cpp
         Camera.h
         Game.h
         ITickable.h
-        VoxelRendererObject.h)
+        VoxelRendererObject.h
+        Rendering/IRenderer.h
+        Rendering/GameWindow.cpp
+        Rendering/GameWindow.h
+        Rendering/SDLRenderer.cpp
+        Rendering/SDLRenderer.h
+        Rendering/SDLBufferHandler.cpp
+        Rendering/SDLBufferHandler.h
+        Rendering/SDLComputeHandler.cpp
+        Rendering/SDLComputeHandler.h
+        Rendering/ResourcePool.cpp
+        Rendering/ResourcePool.h
+        Rendering/SDLTextureHandler.cpp
+        Rendering/SDLTextureHandler.h
+        Rendering/SDLResourceHandler.cpp
+        Rendering/SDLResourceHandler.h
+        Rendering/SDLUploadContext.cpp
+        Rendering/SDLUploadContext.h)
 
 target_link_libraries(voxel_raytracer PRIVATE SDL3::SDL3 SDL3_shadercross::SDL3_shadercross glm::glm)
 

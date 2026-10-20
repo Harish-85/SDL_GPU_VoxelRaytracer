@@ -13,6 +13,8 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "VoxelData.h"
+#include "Rendering/GameWindow.h"
+#include "Rendering/SDLRenderer.h"
 
 struct CameraData {
     glm::vec3 position;
@@ -31,17 +33,16 @@ struct PushConstants {
 class SDLFullScreenComputeRenderer {
 
 private:
-    SDL_Window* _window;
-    SDL_GPUDevice* _device;
     SDL_GPUComputePipeline* _computePipeline;
     SDL_GPUTexture* _computeTexture;
-    SDL_GPUBuffer* voxelBuffer;
-    SDL_GPUBuffer* colorBuffer;
+    GPUBufferHandle voxelBuffer;
+    GPUBufferHandle colorBuffer;
     SDL_GPUTransferBuffer* colorStagingBuff;
     SDL_GPUTransferBuffer* stagingBuffer;
     std::vector<uint32_t> voxels;
     Color colors[256];
-
+    std::unique_ptr<GameWindow>  _window;
+    std::unique_ptr<SDLRenderer> _renderer;
     int _gridHeight,_girdDepth,_gridWidth;
 
     CameraData cam { glm::vec3(50,50,50),glm::vec3(0,1,0),-90.0f,0.0f};
@@ -60,29 +61,9 @@ public:
             return;
         }
 
+        _window = std::make_unique<GameWindow>(1000,1000);
 
-        _window = SDL_CreateWindow("SDLWindow", _width,_height,SDL_WINDOW_RESIZABLE);
-
-        if (!_window) {
-            std::cerr<<"Failed to create window " << SDL_GetError() <<std::endl;
-            return;
-        }
-
-        SDL_PropertiesID props = SDL_CreateProperties();
-        SDL_SetBooleanProperty(props,SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN,false);
-        SDL_SetBooleanProperty(props,SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN,true);
-
-        //_device = SDL_CreateGPUDeviceWithProperties(SDL_GPU_SHADERFORMAT_SPIRV , true, NULL);
-        _device = SDL_CreateGPUDeviceWithProperties(props);
-
-        if (!_device) {
-            std::cerr<<"Failed to create gpu device " << SDL_GetError() <<std::endl;
-            return;
-        }
-
-
-
-        SDL_ClaimWindowForGPUDevice( _device,_window);
+        _renderer = std::make_unique<SDLRenderer>(_window.get());
 
         std::cout<<"Initialization successful" <<std::endl;
 
@@ -93,43 +74,19 @@ public:
     }
 
     void AllocateBuffers(uint voxelSize, uint colorSize) {
-        SDL_GPUBufferCreateInfo voxelBuffInfo{};
-        voxelBuffInfo.size = voxelSize;
-        voxelBuffInfo.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ;
-        voxelBuffer = SDL_CreateGPUBuffer(_device, &voxelBuffInfo);
-
-        SDL_GPUTransferBufferCreateInfo vTransferInfo{};
-        vTransferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-        vTransferInfo.size = voxelSize;
-        stagingBuffer = SDL_CreateGPUTransferBuffer(_device, &vTransferInfo);
-
-        SDL_GPUBufferCreateInfo colorBuffInfo{};
-        colorBuffInfo.size = colorSize;
-        colorBuffInfo.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ;
-        colorBuffer = SDL_CreateGPUBuffer(_device, &colorBuffInfo);
-
-        SDL_GPUTransferBufferCreateInfo cTransferInfo{};
-        cTransferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-        cTransferInfo.size = colorSize;
-        colorStagingBuff = SDL_CreateGPUTransferBuffer(_device, &cTransferInfo);
+        voxelBuffer = _renderer->CreateComputeBuffer( voxelSize);
+        colorBuffer = _renderer->CreateComputeBuffer( colorSize);
     }
 
     void UploadColorToGpu(Color c[256]) {
         std::copy(c, c + 256, std::begin(colors));
-        UploadGpuBuffToStagingBuff( colorStagingBuff,256 * sizeof(Color) , colors);
+        _renderer->UploadDataToBuffer(colorBuffer,colors,256 * sizeof(Color));
 
-        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(_device);
-        CopyStagingBuffToGpuSize(cmd,colorBuffer,colorStagingBuff,256 * sizeof(Color));
-        SDL_SubmitGPUCommandBuffer( cmd);
     }
 
     void UploadVoxelsToGpu(std::vector<uint32_t> v) {
         voxels = v;
-        UploadGpuBuffToStagingBuff(stagingBuffer,voxels.size() * sizeof(uint32_t),voxels.data());
-
-        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(_device);
-        CopyStagingBuffToGpuSize(cmd,voxelBuffer,stagingBuffer,voxels.size() * sizeof(uint32_t));
-        SDL_SubmitGPUCommandBuffer( cmd);
+        _renderer->UploadDataToBuffer(voxelBuffer,voxels.data(),voxels.size() * sizeof(uint32_t));
     }
 
     void SetCameraPosition(glm::vec3 pos) {
@@ -142,12 +99,12 @@ public:
 
     void Initialize() {
 
-        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(_device);
+//        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(_device);
 
-        CopyStagingBuffToGpuSize(cmd,voxelBuffer,stagingBuffer,voxels.size() * sizeof(uint32_t));
-        CopyStagingBuffToGpuSize(cmd,colorBuffer,colorStagingBuff,256 * sizeof(Color));
+  //      CopyStagingBuffToGpuSize(cmd,voxelBuffer,stagingBuffer,voxels.size() * sizeof(uint32_t));
+    //    CopyStagingBuffToGpuSize(cmd,colorBuffer,colorStagingBuff,256 * sizeof(Color));
 
-        SDL_SubmitGPUCommandBuffer( cmd);
+      //  SDL_SubmitGPUCommandBuffer( cmd);
     }
 
 
@@ -169,7 +126,7 @@ public:
         SDL_ReleaseGPUComputePipeline(_device,_computePipeline);
 
         SDL_DestroyGPUDevice(_device);
-        SDL_DestroyWindow(_window);
+
         SDL_Quit();
     }
 
@@ -199,7 +156,7 @@ public:
         SDL_GPUTexture* swapChainTexture;
         uint width = _width;
         uint height = _height;
-        SDL_WaitAndAcquireGPUSwapchainTexture(cmd,_window,&swapChainTexture,&width,&height);
+        SDL_WaitAndAcquireGPUSwapchainTexture(cmd,_window->GetWindow(),&swapChainTexture,&width,&height);
 
         if (!swapChainTexture) {
 
@@ -385,26 +342,6 @@ private :
         size = spirVSize;
         return static_cast<uint8_t *> (gpuSpirV);
 
-
-        std::cout<<"Compilation successful"<<std::endl;
-
-        SDL_GPUShaderCreateInfo shaderInfo{};
-        shaderInfo.entrypoint = "main";
-        shaderInfo.format = SDL_GPU_SHADERFORMAT_SPIRV;
-        shaderInfo.code = (uint8_t*)gpuSpirV;
-        shaderInfo.code_size = spirVSize;
-
-        SDL_GPUShader* computeShader = SDL_CreateGPUShader(_device, &shaderInfo);
-
-
-        if (!computeShader) {
-            std::cerr << "compilation to computeshader failed " << SDL_GetError() << std::endl;
-            return nullptr;
-        }
-        SDL_free( gpuSpirV);
-
-        std::cout << "Compilation to compute shader successful" <<std::endl;
-        //return computeShader;
     }
 };
 

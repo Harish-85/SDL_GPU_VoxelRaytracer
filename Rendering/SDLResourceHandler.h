@@ -1,0 +1,15 @@
+//
+// Created by harish on 10/20/26.
+//
+
+#ifndef VOXEL_RAYTRACER_SDLRESOURCEHANDLER_H
+#define VOXEL_RAYTRACER_SDLRESOURCEHANDLER_H
+
+
+class SDLResourceHandler {
+
+
+};
+
+
+#endif //VOXEL_RAYTRACER_SDLRESOURCEHANDLER_H
