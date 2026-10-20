@@ -7,26 +7,22 @@
 #include <vector>
 #include <SDL3/SDL_gpu.h>
 
+#include "ResourcePool.h"
 #include "SDLUploadContext.h"
 
+struct GPUBufferTag{};
 
-class GPUBufferHandle {
-
-public:
-    uint32_t id = 0;
-    [[nodiscard]] bool IsValid() const noexcept { return id != 0; }
-};
-
+using GPUBufferHandle = Handle<GPUBufferTag>;
 
 class SDLBufferHandler {
 private:
     SDL_GPUDevice* _device;
     SDLUploadContext* _uploadContext;
-    std::vector<SDL_GPUBuffer*> _buffers;
-    uint32_t _nextBufferId = 1;
+    ResourcePool<SDL_GPUBuffer*,GPUBufferTag> _buffers;
 public:
     explicit SDLBufferHandler(SDL_GPUDevice* device,SDLUploadContext* uploadContext);
 
+    SDL_GPUBuffer* GetBuffer( const GPUBufferHandle handle) {return _buffers.Get(handle);}
 
     uint32_t AllocateRawBuffer(size_t size, SDL_GPUBufferUsageFlags usage);
 

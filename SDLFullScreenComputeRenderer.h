@@ -33,6 +33,7 @@ struct PushConstants {
 class SDLFullScreenComputeRenderer {
 
 private:
+    SDL_GPUDevice* _device;
     SDL_GPUComputePipeline* _computePipeline;
     SDL_GPUTexture* _computeTexture;
     GPUBufferHandle voxelBuffer;
@@ -65,6 +66,7 @@ public:
 
         _renderer = std::make_unique<SDLRenderer>(_window.get());
 
+        _device = _renderer->GetDevice();
         std::cout<<"Initialization successful" <<std::endl;
 
         _computePipeline = GetComputePipeline();
@@ -200,8 +202,11 @@ public:
     << "sizeof = " << sizeof(PushConstants) << '\n';
         SDL_PushGPUComputeUniformData( cmd, 0,&constants,sizeof(constants));
 
-        SDL_BindGPUComputeStorageBuffers( computePass,0,&voxelBuffer,1);
-        SDL_BindGPUComputeStorageBuffers( computePass,1,&colorBuffer,1);
+        SDL_GPUBuffer *voxGPUBuffer = _renderer->GetComputeBuffer(voxelBuffer);
+        SDL_GPUBuffer *colGPUBuff = _renderer->GetComputeBuffer(colorBuffer);
+
+        SDL_BindGPUComputeStorageBuffers( computePass,0,&voxGPUBuffer,1);
+        SDL_BindGPUComputeStorageBuffers( computePass,1,&colGPUBuff,1);
 
         SDL_DispatchGPUCompute( computePass,width/8,height/8,1);
         SDL_EndGPUComputePass( computePass);
@@ -267,11 +272,6 @@ private :
         return computeTexture;
     }
 
-    void UploadGpuBuffToStagingBuff(SDL_GPUTransferBuffer* &tranferBuff,uint size,void* data) {
-        void* dataPtr = SDL_MapGPUTransferBuffer(_device,tranferBuff,false);
-        SDL_memcpy( dataPtr,data,size);
-        SDL_UnmapGPUTransferBuffer(_device, tranferBuff);
-    }
 
     SDL_GPUComputePipeline* GetComputePipeline() {
         size_t spriVSize;

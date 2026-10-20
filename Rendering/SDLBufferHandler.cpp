@@ -16,14 +16,8 @@ uint32_t SDLBufferHandler::AllocateRawBuffer(size_t size, SDL_GPUBufferUsageFlag
     SDL_GPUBuffer* buff = SDL_CreateGPUBuffer( _device,&bufferInfo);
 
 
-    uint32_t id = _nextBufferId;
-    if (id>= _buffers.size()) {
-        _buffers.resize(id+1);
-    }
-    _buffers[id] = buff;
-    _nextBufferId++;
 
-    return id;
+    return    (_buffers.Add(buff).id);
 }
 
 GPUBufferHandle SDLBufferHandler::CreateVertexBuffer(const size_t size) {
@@ -48,7 +42,7 @@ GPUBufferHandle SDLBufferHandler::CreateComputeBuffer(const size_t size, bool al
 
 
 void SDLBufferHandler::UploadBufferData(const GPUBufferHandle handle, const void *data, const size_t size) const {
-    SDL_GPUBuffer* targetBuffer = _buffers[handle.id];
+    SDL_GPUBuffer* targetBuffer = _buffers.Get(handle);
 
     _uploadContext->Upload( data,size,
         [&](SDL_GPUCopyPass* pass, SDL_GPUTransferBuffer* tb){
@@ -67,10 +61,10 @@ void SDLBufferHandler::UploadBufferData(const GPUBufferHandle handle, const void
 }
 
 void SDLBufferHandler::DestroyBuffer(GPUBufferHandle handle) {
-    if (handle.id >= _buffers.size() || _buffers[handle.id] == nullptr) {
-        return;
+
+
+    if (_buffers.Get(handle)) {
+        _buffers.Remove(handle);
     }
 
-    SDL_ReleaseGPUBuffer(_device,_buffers[handle.id]);
-    _buffers[handle.id] = nullptr;
 }

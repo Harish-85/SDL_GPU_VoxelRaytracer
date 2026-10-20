@@ -57,11 +57,16 @@ public:
     [[nodiscard]] GPUBufferHandle CreateIndexBuffer(const size_t size) const {
         return _bufferHandler->CreateIndexBuffer(size);
     }
+
+    SDL_GPUBuffer* GetComputeBuffer(GPUBufferHandle buff) {
+        return _bufferHandler->GetBuffer(buff);
+    }
+
     void UploadDataToBuffer(const GPUBufferHandle handle,const void* data ,const size_t size) const {
         return _bufferHandler->UploadBufferData( handle, data,size);
     }
 
-
+    SDL_GPUDevice * GetDevice() { return _device;}
 };
 
 
