@@ -95,14 +95,16 @@ public:
     }
 
     void Dispatch(SDL_GPUCommandBuffer* cmd, uint32_t x, uint32_t y ,uint32_t z) {
+        std::cout << "Dis[atching compute shader" <<std::endl;
         SDL_GPUComputePass *computePass = SDL_BeginGPUComputePass(cmd, readWriteTex.data(), readWriteTex.size(),
                                                                   readWriteBuffs.data(), readWriteBuffs.size());
 
         SDL_BindGPUComputePipeline( computePass, _computePipeline);
 
         if (pushConstant)
-            SDL_PushGPUComputeUniformData( cmd, 0,&pushConstant,pushConstSize);
+            SDL_PushGPUComputeUniformData( cmd, 0,pushConstant,pushConstSize);
 
+        std::cout << "set push constants" <<std::endl;
         // read only buff and tex
         for (int i = 0 ; i< readOnlyTex.size(); i++) {
             if (readOnlyTex[i] == nullptr) {
@@ -111,6 +113,7 @@ public:
 
             SDL_BindGPUComputeStorageTextures( computePass,i,&readOnlyTex[i],1);
         }
+        std::cout << "set readonly buff tex" <<std::endl;
         for (int i = 0 ; i< readOnlyBuffs.size(); i++) {
             if (readOnlyBuffs[i] == nullptr) {
                 continue;
@@ -118,7 +121,7 @@ public:
 
             SDL_BindGPUComputeStorageBuffers( computePass,i,&readOnlyBuffs[i],1);
         }
-
+        std::cout << "set readonly buff " <<std::endl;
 
         SDL_DispatchGPUCompute( computePass,x,y,z);
         SDL_EndGPUComputePass(computePass);

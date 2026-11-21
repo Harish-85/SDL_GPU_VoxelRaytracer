@@ -63,9 +63,6 @@ public:
             _renderer->SetCameraDirection(camera->GetForward());
             _renderer->SetCameraPosition(camera->GetPosition());
 
-
-
-
             _renderer->Render();
         }
     }

@@ -33,7 +33,6 @@ class SDLFullScreenComputeRenderer {
 private:
     SDL_Window* _window;
     SDL_GPUDevice* _device;
-    SDL_GPUComputePipeline* _computePipeline;
     SDL_GPUTexture* _computeTexture;
     SDL_GPUBuffer* voxelBuffer;
     SDL_GPUBuffer* colorBuffer;
@@ -66,10 +65,10 @@ public:
 
         std::cout<<"Initialization successful" <<std::endl;
 
-        _computePipeline = GetComputePipeline();
         _computeTexture = SetupComputeTexture();
-        AllocateBuffers(width * height * depth * sizeof(uint32_t), sizeof(Color) * 256);
+        _voxelComputeShader.SetReadWriteTexture( 0,_computeTexture);
 
+        AllocateBuffers(width * height * depth * sizeof(uint32_t), sizeof(Color) * 256);
     }
 
     void AllocateBuffers(uint voxelSize, uint colorSize) {
@@ -101,6 +100,8 @@ public:
         SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(_device);
         CopyStagingBuffToGpuSize(cmd,colorBuffer,colorStagingBuff,256 * sizeof(Color));
         SDL_SubmitGPUCommandBuffer( cmd);
+
+        _voxelComputeShader.SetReadOnlyBuffer( 1,colorBuffer);
     }
 
     void UploadVoxelsToGpu(std::vector<uint32_t> v) {
@@ -110,6 +111,9 @@ public:
         SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(_device);
         CopyStagingBuffToGpuSize(cmd,voxelBuffer,stagingBuffer,voxels.size() * sizeof(uint32_t));
         SDL_SubmitGPUCommandBuffer( cmd);
+
+
+        _voxelComputeShader.SetReadOnlyBuffer( 0,voxelBuffer);
     }
 
     void SetCameraPosition(glm::vec3 pos) {
@@ -120,15 +124,6 @@ public:
         cam.front = forward;
     }
 
-    void Initialize() {
-
-        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(_device);
-
-        CopyStagingBuffToGpuSize(cmd,voxelBuffer,stagingBuffer,voxels.size() * sizeof(uint32_t));
-        CopyStagingBuffToGpuSize(cmd,colorBuffer,colorStagingBuff,256 * sizeof(Color));
-
-        SDL_SubmitGPUCommandBuffer( cmd);
-    }
 
 
 
@@ -146,7 +141,6 @@ public:
 
     void ExitApp() {
         SDL_ReleaseGPUTexture( _device,_computeTexture);
-        SDL_ReleaseGPUComputePipeline(_device,_computePipeline);
 
         SDL_DestroyGPUDevice(_device);
         SDL_DestroyWindow(_window);
@@ -189,23 +183,7 @@ public:
         }
 
 
-        SDL_GPUStorageTextureReadWriteBinding computeTexBindings {};
-        computeTexBindings.texture = _computeTexture;
-        computeTexBindings.mip_level = 0;
-        computeTexBindings.layer = 0;
-        computeTexBindings.cycle = true;
 
-
-        computeTexBindings.texture = _computeTexture;
-        computeTexBindings.mip_level = 0;
-        computeTexBindings.layer = 0;
-        computeTexBindings.cycle = true;
-
-
-        SDL_GPUComputePass* computePass= SDL_BeginGPUComputePass( cmd, &computeTexBindings,1,
-            nullptr,0);
-
-        SDL_BindGPUComputePipeline( computePass, _computePipeline);
         PushConstants constants{};
         constants.direction = glm::vec4(cam.front, 0.0f);
         //constants.origin    = glm::vec4(glm::vec3(cam.transform[3]), 0.0f);
@@ -214,37 +192,11 @@ public:
         constants.height = _gridHeight;
         constants.depth = _girdDepth;
         constants.width = _gridWidth;
+        _voxelComputeShader.SetPushConstants(&constants,sizeof(PushConstants));
+        _voxelComputeShader.Dispatch(cmd,_width/8,_height/8,1);
 
-        std::cout<< "Pushing values to compute shader "<<std::endl;
-        std::cout
-    << "width  = " << constants.width << '\n'
-    << "height = " << constants.height << '\n'
-    << "depth  = " << constants.depth << '\n'
-    << "sizeof = " << sizeof(PushConstants) << '\n';
-        SDL_PushGPUComputeUniformData( cmd, 0,&constants,sizeof(constants));
-
-        SDL_BindGPUComputeStorageBuffers( computePass,0,&voxelBuffer,1);
-        SDL_BindGPUComputeStorageBuffers( computePass,1,&colorBuffer,1);
-
-        SDL_DispatchGPUCompute( computePass,width/8,height/8,1);
-        SDL_EndGPUComputePass( computePass);
         std::cout<< "Compute shader done "<<SDL_GetError() <<std::endl;
 
-
-
-        SDL_GPUColorTargetInfo colorTargetInfo{};
-
-        colorTargetInfo.clear_color = { 1.0f,0.9f,0.8f,1.0f};
-        colorTargetInfo.load_op = SDL_GPU_LOADOP_CLEAR;
-
-        colorTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
-        colorTargetInfo.texture = swapChainTexture;
-
-       // SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass( cmd,&colorTargetInfo,1, NULL);
-
-
-
-        //SDL_EndGPURenderPass(renderPass);
 
         SDL_GPUBlitInfo blitInfo{};
         blitInfo.cycle = true;
