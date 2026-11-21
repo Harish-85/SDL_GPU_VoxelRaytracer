@@ -6,11 +6,11 @@
 #define VOXEL_RAYTRACER_FULLSCREENRENDERER_H
 
 
-#include <iostream>
 #include  <SDL3/SDL.h>
 #include <SDL3_shadercross/SDL_shadercross.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include "ComputeShader.h"
 
 #include "VoxelData.h"
 
@@ -48,38 +48,18 @@ private:
 
     int _width =1000,_height = 1000;
 
+    const std::string renderShaderPath = "assets/shaders/computeShader.hlsl";
+    ComputeShader _voxelComputeShader;
+
+
 public:
 
-    SDLFullScreenComputeRenderer(int width,int height,int depth) {
+    SDLFullScreenComputeRenderer(int width,int height,int depth) :
+    _window(CreateWindow(width,height)), _device(CreateDevice()),_voxelComputeShader(renderShaderPath,_device)
+        {
         _girdDepth = depth;
         _gridHeight = height;
         _gridWidth = width;
-
-        if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-            std::cerr<<"Failed to initialize SDL " << SDL_GetError() <<std::endl;
-            return;
-        }
-
-
-        _window = SDL_CreateWindow("SDLWindow", _width,_height,SDL_WINDOW_RESIZABLE);
-
-        if (!_window) {
-            std::cerr<<"Failed to create window " << SDL_GetError() <<std::endl;
-            return;
-        }
-
-        SDL_PropertiesID props = SDL_CreateProperties();
-        SDL_SetBooleanProperty(props,SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN,false);
-        SDL_SetBooleanProperty(props,SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN,true);
-
-        //_device = SDL_CreateGPUDeviceWithProperties(SDL_GPU_SHADERFORMAT_SPIRV , true, NULL);
-        _device = SDL_CreateGPUDeviceWithProperties(props);
-
-        if (!_device) {
-            std::cerr<<"Failed to create gpu device " << SDL_GetError() <<std::endl;
-            return;
-        }
-
 
 
         SDL_ClaimWindowForGPUDevice( _device,_window);
@@ -286,7 +266,34 @@ public:
 
 
 private :
+    static SDL_Window* CreateWindow(const int width,const int height) {
+        if (!SDL_Init(SDL_INIT_VIDEO)) {
+            std::cerr<<"Failed to initialize SDL " << SDL_GetError() <<std::endl;
+            throw std::runtime_error(std::string("Failed to initialize SDL: ") + SDL_GetError());
+        }
 
+
+        SDL_Window*  window = SDL_CreateWindow("SDLWindow", width,height,SDL_WINDOW_RESIZABLE);
+
+        if (!window) {
+            throw std::runtime_error(std::string("Failed to create window: ") + SDL_GetError());
+        }
+        return window;
+    }
+
+    static SDL_GPUDevice* CreateDevice() {
+        const SDL_PropertiesID props = SDL_CreateProperties();
+        SDL_SetBooleanProperty(props,SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN,false);
+        SDL_SetBooleanProperty(props,SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN,true);
+
+        //_device = SDL_CreateGPUDeviceWithProperties(SDL_GPU_SHADERFORMAT_SPIRV , true, NULL);
+       SDL_GPUDevice* device = SDL_CreateGPUDeviceWithProperties(props);
+
+        if (!device) {
+            throw std::runtime_error(std::string("Failed to create GPU device: ") + SDL_GetError());
+        }
+        return device;
+    }
 
     SDL_GPUTexture *SetupComputeTexture() {
         SDL_GPUTextureCreateInfo computeTextureInfo{};
